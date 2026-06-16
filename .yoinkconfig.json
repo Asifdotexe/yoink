@@ -1,0 +1,49 @@
+{
+  "exclude_patterns": [
+    "**/__pycache__/**",
+    "**/.git/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/node_modules/**",
+    "**/.yoinkconfig.json",
+    "**/yoink_output.md",
+    "**/dist/**",
+    "**/build/**"
+  ],
+  "include_extensions": [
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".go",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".html",
+    ".css",
+    ".json",
+    ".md",
+    ".toml",
+    ".yaml",
+    ".yml"
+  ],
+  "secret_patterns": {
+    "ip_address": "\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b",
+    "generic_api_key": "(?:key|api|secret|token|password|passwd|auth)_?(?:key|api|secret|token|password|passwd|auth)?\\s*[:=]\\s*['\"][a-zA-Z0-9_\\-]{16,}['\"]",
+    "aws_access_key": "AKIA[0-9A-Z]{16}",
+    "aws_secret_key": "key|secret.*['\"][0-9a-zA-Z+/]{40}['\"]"
+  },
+  "strip_comments": true,
+  "strip_whitespace": true,
+  "mask_secrets": true,
+  "compliance_patterns": {
+    "\\b[a-zA-Z0-9.-]+\\.internal\\.net\\b": "[PROPRIETARY_ENDPOINT]",
+    "\\bYoinkCorp\\b": "[COMPANY_NAME]",
+    "\\bConfidentialProprietaryLogicID\\b": "[PROPRIETARY_ID]"
+  },
+  "visualize": true,
+  "output_file": "yoink_output.md"
+}
