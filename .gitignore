@@ -216,3 +216,5 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+yoink_planning_document.docx
+yoink_output_test.md
