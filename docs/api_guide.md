@@ -96,3 +96,23 @@ Interactive OpenAPI docs are available at:
 *   `strip_whitespace`: bool (default: true)
 *   `mask_secrets`: bool (default: true)
 *   `visualize`: bool (default: true)
+
+---
+
+## Deployment to Render
+
+The repository includes a [render.yaml](file:///D:/yoink/render.yaml) Blueprint file for automated deployment.
+
+### Manual Setup Configuration
+If deploying manually through the Render Dashboard:
+1.  Create a new **Web Service** and connect your repository.
+2.  Set the **Environment / Runtime** to `Python`.
+3.  Set the **Build Command** to:
+    ```bash
+    pip install --upgrade pip && pip install .
+    ```
+4.  Set the **Start Command** to:
+    ```bash
+    uvicorn yoink.api.main:app --host 0.0.0.0 --port $PORT
+    ```
+5.  (Optional) Add `PYTHON_VERSION` environment variable with value `3.10.12`.
