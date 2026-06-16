@@ -13,34 +13,18 @@ Yoink is a command-line tool and FastAPI backend designed to bundle, sanitize, a
 
 ---
 
-## Key Features
+## Why Yoink?
 
-*   **Smart Directory Scanner:** Recursively traverses paths while respecting `.gitignore` rules and custom exclude patterns.
-*   **Token Shredder:** Strips comments, docstrings, and excess whitespaces to reduce prompt token sizes by up to 50%.
-*   **Secret Shield:** Programmatically identifies and masks API keys, AWS credentials, private keys, emails, and IP addresses.
-*   **IP and Compliance Stripper:** Replaces proprietary company URLs, trademarks, and legal entities with generic descriptors based on configurable patterns.
-*   **Dependency Tree Visualizer:** Constructs Abstract Syntax Trees (AST) and import patterns to output structural ASCII diagrams and Mermaid flowcharts.
-*   **Dual Interface:** Provides a terminal command-line interface (`yoink`) and a RESTful backend API.
+Feeding full source repositories into LLMs or autonomous AI agents is powerful, but it comes with three major headaches:
 
----
-
-## Directory Structure
-
-```text
-yoink/
-├── .github/
-│   └── workflows/         <- CI/CD testing pipeline
-├── docs/                  <- CLI and API usage guides
-├── src/
-│   └── yoink/             <- Main package directory
-│       ├── core/          <- Business logic (scanner, shredder, shield, packer)
-│       ├── cli/           <- Terminal command interface
-│       └── api/           <- FastAPI web routes and service
-├── tests/                 <- Core, CLI, and API unit tests
-├── .yoinkconfig.json      <- Default configuration template
-├── pyproject.toml         <- Modern package configuration
-└── README.md              <- Project documentation
-```
+1.  **[Exorbitant](https://www.merriam-webster.com/dictionary/exorbitant) Token Costs:** AI prompts get bloated with system boilerplate, repetitive docstrings, and comments, wasting up to 50% of your context window on noise.
+    *   *How Yoink helps:* The **Token Shredder** strips out comments, docstrings, and excess whitespace, cutting codebase sizes in half and dramatically reducing downstream API fees.
+2.  **Accidental Leakage of Secrets:** Pushing raw code to external AI providers risks exposing internal API keys, passwords, database URLs, and private keys.
+    *   *How Yoink helps:* The **Secret Shield** programmatically scans and redacts credentials, emails, and IP addresses before any code leaves your local workspace.
+3.  **Enterprise Non-Compliance:** Sharing proprietary legal entities, trade secrets, or internal server routing targets (`*.internal.net`) can trigger company policy alerts.
+    *   *How Yoink helps:* The **Compliance Stripper** automatically replaces custom trademarks, license headers, and corporate endpoints with generic placeholder descriptors based on config rules.
+4.  **Lost Codebase Structure:** LLMs struggle to understand how files interact when code is dumped as unstructured text.
+    *   *How Yoink helps:* The **Dependency Tree Visualizer** automatically parses code imports using ASTs to generate clear text diagrams and Mermaid flowcharts at the top of your pack, providing instant architecture maps to the LLM.
 
 ---
 
