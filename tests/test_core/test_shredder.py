@@ -1,5 +1,6 @@
 from yoink.core.shredder import shred_code
 
+
 def test_python_comment_stripping():
     code = """
 def foo():
@@ -13,9 +14,10 @@ def foo():
     x = 1
     y = "hello # world"
     return x"""
-    
+
     result = shred_code(code, ".py", strip_comments=True, strip_whitespace=True)
     assert result.strip() == expected.strip()
+
 
 def test_c_comment_stripping():
     code = """

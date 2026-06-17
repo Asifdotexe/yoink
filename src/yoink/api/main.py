@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from yoink.api.routes import router
 
 app = FastAPI(
     title="Yoink API",
     description="The Web backend for Yoink: Pack and sanitize codebases for LLMs.",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -16,6 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 async def root():
     return {
@@ -24,8 +26,9 @@ async def root():
         "endpoints": {
             "/api/v1/sanitize": "POST - Sanitize a single file's content",
             "/api/v1/pack": "POST - Pack multiple files/contents",
-            "/api/v1/pack-zip": "POST - Upload a ZIP codebase and pack it"
-        }
+            "/api/v1/pack-zip": "POST - Upload a ZIP codebase and pack it",
+        },
     }
+
 
 app.include_router(router)

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from yoink.core.shield import mask_secrets, strip_compliance
 from yoink.core.shredder import shred_code
+from yoink.core.tokenizer import count_tokens
 from yoink.core.visualizer import (
     build_dependency_graph,
     generate_mermaid_flowchart,
@@ -29,6 +30,7 @@ def pack_codebase(
         f"- **Generated on:** {datetime.now().isoformat()}",
         f"- **Root Directory:** `{root_path.as_posix()}`",
         f"- **Total Files:** {len(files)}",
+        "- **Estimated Tokens:** {{TOKEN_COUNT}}",
         "",
         "## Scanned Files List",
     ]
@@ -101,4 +103,6 @@ def pack_codebase(
         lines.append(f"<!-- END_FILE: {rel} -->")
         lines.append("")
 
-    return "\n".join(lines)
+    draft = "\n".join(lines)
+    token_count = count_tokens(draft)
+    return draft.replace("{{TOKEN_COUNT}}", f"{token_count:,}")

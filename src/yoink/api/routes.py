@@ -1,21 +1,25 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Optional
 import io
+import tempfile
 import zipfile
 from pathlib import Path
-import tempfile
+from typing import Dict, List, Optional
 
-from yoink.core.shredder import shred_code
-from yoink.core.shield import mask_secrets, strip_compliance
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
+
 from yoink.core.packer import pack_codebase
 from yoink.core.scanner import get_files_to_process
+from yoink.core.shield import mask_secrets, strip_compliance
+from yoink.core.shredder import shred_code
+from yoink.core.tokenizer import count_tokens
 
 router = APIRouter(prefix="/api/v1")
+
 
 class FileInput(BaseModel):
     path: str
     content: str
+
 
 class PackRequest(BaseModel):
     files: List[FileInput]
@@ -26,9 +30,12 @@ class PackRequest(BaseModel):
     compliance_patterns: Optional[Dict[str, str]] = None
     visualize: Optional[bool] = True
 
+
 class PackResponse(BaseModel):
     total_files: int
     packed_content: str
+    estimated_tokens: int
+
 
 class SanitizeRequest(BaseModel):
     content: str
@@ -39,8 +46,11 @@ class SanitizeRequest(BaseModel):
     custom_secrets: Optional[Dict[str, str]] = None
     compliance_patterns: Optional[Dict[str, str]] = None
 
+
 class SanitizeResponse(BaseModel):
     sanitized_content: str
+    estimated_tokens: int
+
 
 @router.post("/sanitize", response_model=SanitizeResponse)
 async def sanitize_content(request: SanitizeRequest):
@@ -48,15 +58,23 @@ async def sanitize_content(request: SanitizeRequest):
     Sanitize a single file's content (stripping comments/whitespace and masking secrets).
     """
     content = request.content
-    content = shred_code(content, request.file_extension, request.strip_comments, request.strip_whitespace)
-    
+    content = shred_code(
+        content,
+        request.file_extension,
+        request.strip_comments,
+        request.strip_whitespace,
+    )
+
     if request.mask_secrets:
         content = mask_secrets(content, request.custom_secrets)
-        
+
     if request.compliance_patterns:
         content = strip_compliance(content, request.compliance_patterns)
-        
-    return SanitizeResponse(sanitized_content=content)
+
+    return SanitizeResponse(
+        sanitized_content=content, estimated_tokens=count_tokens(content)
+    )
+
 
 @router.post("/pack", response_model=PackResponse)
 async def pack_files(request: PackRequest):
@@ -66,7 +84,7 @@ async def pack_files(request: PackRequest):
     """
     if not request.files:
         raise HTTPException(status_code=400, detail="No files provided.")
-        
+
     # Write files to a temporary directory to reuse packer
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -77,7 +95,7 @@ async def pack_files(request: PackRequest):
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(file_input.content)
             file_paths.append(file_path)
-            
+
         packed_md = pack_codebase(
             root_dir=temp_path,
             files=file_paths,
@@ -86,13 +104,15 @@ async def pack_files(request: PackRequest):
             mask_sensitive=request.mask_secrets,
             custom_secrets=request.custom_secrets,
             compliance_patterns=request.compliance_patterns,
-            visualize=request.visualize
+            visualize=request.visualize,
         )
-        
+
         return PackResponse(
             total_files=len(file_paths),
-            packed_content=packed_md
+            packed_content=packed_md,
+            estimated_tokens=count_tokens(packed_md),
         )
+
 
 @router.post("/pack-zip", response_model=PackResponse)
 async def pack_zip(
@@ -100,45 +120,52 @@ async def pack_zip(
     strip_comments: bool = Form(True),
     strip_whitespace: bool = Form(True),
     mask_secrets: bool = Form(True),
-    visualize: bool = Form(True)
+    visualize: bool = Form(True),
 ):
     """
     Upload a zip file containing a codebase and receive a packed markdown file.
     """
     if not zip_file.filename.endswith(".zip"):
-        raise HTTPException(status_code=400, detail="Uploaded file must be a zip archive.")
-        
+        raise HTTPException(
+            status_code=400, detail="Uploaded file must be a zip archive."
+        )
+
     contents = await zip_file.read()
-    
+
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        
+
         try:
             with zipfile.ZipFile(io.BytesIO(contents)) as z:
                 z.extractall(temp_path)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid zip file: {e}")
-            
+
         # Read .yoinkconfig.json inside the zip if present to align scanner/compliance configurations
         # ponytail: simplified configuration loading to avoid file context managers and redundant variable initializations.
         # Why: We load config via json.loads and read_text using a fallback empty dictionary. This keeps variables clean and defaults to None if the keys are absent, avoiding multi-line variable declarations.
         archive_config_file, archive_configuration = temp_path / ".yoinkconfig.json", {}
         if archive_config_file.exists():
             import json
+
             try:
-                archive_configuration = json.loads(archive_config_file.read_text(encoding="utf-8"))
+                archive_configuration = json.loads(
+                    archive_config_file.read_text(encoding="utf-8")
+                )
             except Exception:
                 pass
-                
+
         compliance_patterns = archive_configuration.get("compliance_patterns", None)
         custom_secrets = archive_configuration.get("secret_patterns", None)
         exclude_patterns = archive_configuration.get("exclude_patterns", None)
         include_extensions = archive_configuration.get("include_extensions", None)
-                
+
         files = get_files_to_process(temp_path, exclude_patterns, include_extensions)
         if not files:
-            raise HTTPException(status_code=400, detail="No valid text files found in the zip archive.")
-            
+            raise HTTPException(
+                status_code=400, detail="No valid text files found in the zip archive."
+            )
+
         packed_md = pack_codebase(
             root_dir=temp_path,
             files=files,
@@ -147,10 +174,11 @@ async def pack_zip(
             mask_sensitive=mask_secrets,
             custom_secrets=custom_secrets,
             compliance_patterns=compliance_patterns,
-            visualize=visualize
+            visualize=visualize,
         )
-        
+
         return PackResponse(
             total_files=len(files),
-            packed_content=packed_md
+            packed_content=packed_md,
+            estimated_tokens=count_tokens(packed_md),
         )
