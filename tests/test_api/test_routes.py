@@ -20,4 +20,25 @@ def test_api_sanitize():
         },
     )
     assert response.status_code == 200
-    assert "test comment" not in response.json()["sanitized_content"]
+    data = response.json()
+    assert "test comment" not in data["sanitized_content"]
+    assert "estimated_tokens" in data
+    assert data["estimated_tokens"] > 0
+
+
+def test_api_pack():
+    response = client.post(
+        "/api/v1/pack",
+        json={
+            "files": [
+                {"path": "main.py", "content": "print('hello')"},
+            ],
+            "visualize": False,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "packed_content" in data
+    assert data["total_files"] == 1
+    assert "estimated_tokens" in data
+    assert data["estimated_tokens"] > 0

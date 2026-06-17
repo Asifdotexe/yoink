@@ -4,7 +4,16 @@ from pathlib import Path
 
 
 def get_python_imports(file_path: Path, root_dir: Path) -> list[str]:
-    """Parse a python file and find all imports."""
+    """
+    Parse a Python file using the Abstract Syntax Tree (AST) to find imports.
+
+    Walks the AST structure to extract both module-level and function-level
+    imports (`import x` or `from y import z`).
+
+    :param file_path: Path to the target Python file.
+    :param root_dir: Root directory of the scanned project.
+    :return: List of imported module names.
+    """
     try:
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             tree = ast.parse(f.read(), filename=str(file_path))
@@ -18,7 +27,7 @@ def get_python_imports(file_path: Path, root_dir: Path) -> list[str]:
             for alias in node.names:
                 imports.append(alias.name)
         elif isinstance(node, ast.ImportFrom):
-            # level > 0 indicates relative import (e.g. from .core import scanner)
+            # Node level > 0 indicates relative import (e.g. `from .core import scanner`)
             module_name = node.module or ""
             imports.append(module_name)
 
@@ -26,7 +35,15 @@ def get_python_imports(file_path: Path, root_dir: Path) -> list[str]:
 
 
 def get_non_python_imports(file_path: Path) -> list[str]:
-    """Extract imports from JS, TS, Go, C/C++ using regexes."""
+    """
+    Extract imports from JS, TS, Go, and C/C++ files using regular expressions.
+
+    Parses require/import syntax in JavaScript/TypeScript, import blocks in Go,
+    and include statements in C/C++.
+
+    :param file_path: Path to the target source file.
+    :return: List of raw imported path strings.
+    """
     try:
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
@@ -37,25 +54,25 @@ def get_non_python_imports(file_path: Path) -> list[str]:
     suffix = file_path.suffix.lower()
 
     if suffix in (".js", ".ts", ".jsx", ".tsx"):
-        # Match: import ... from '...' or import '...'
+        # Match: `import ... from '...'` or `import '...'`
         matches = re.findall(
             r"""import\s+(?:.*?\s+from\s+)?['"]([^'"]+)['"]""", content
         )
         imports.extend(matches)
-        # Match: require('...')
+        # Match: `require('...')`
         matches_req = re.findall(r"""require\s*\(\s*['"]([^'"]+)['"]\s*\)""", content)
         imports.extend(matches_req)
     elif suffix == ".go":
-        # Match: import "..."
+        # Match: `import "..."`
         matches = re.findall(r"""import\s+['"]([^'"]+)['"]""", content)
         imports.extend(matches)
-        # Match: import ( ... )
+        # Match: `import ( ... )` blocks
         multi_line = re.findall(r"""import\s*\((.*?)\)""", content, re.DOTALL)
         for block in multi_line:
             matches_block = re.findall(r"""['"]([^'"]+)['"]""", block)
             imports.extend(matches_block)
     elif suffix in (".c", ".cpp", ".h", ".hpp"):
-        # Match: #include "..." (local headers, not <header>)
+        # Match local includes (`#include "..."`) while skipping standard library (`#include <header>`)
         matches = re.findall(r"""#include\s+['"]([^'"]+)['"]""", content)
         imports.extend(matches)
 
@@ -65,14 +82,25 @@ def get_non_python_imports(file_path: Path) -> list[str]:
 def resolve_relative_import(
     import_path: str, current_file: Path, files_set: set[Path]
 ) -> Path | None:
-    """Resolve a relative import string to a concrete file in the scanned set."""
+    """
+    Resolve a relative import string to a concrete scanned file path.
+
+    Evaluates relative directory jumps and searches for matching extensions
+    or directories containing index files.
+
+    :param import_path: Raw import target path string.
+    :param current_file: Path of the importing file.
+    :param files_set: Set of all files included in the active scan.
+    :return: Resolved absolute file Path, or None if unresolved.
+    """
     current_dir = current_file.parent
     try:
         resolved = (current_dir / import_path).resolve()
     except Exception:
         return None
 
-    # Check potential suffixes
+    # Iterates through valid extensions or index extensions to resolve
+    # extensionless file paths (common in Node and C++).
     for ext in (".js", ".ts", ".jsx", ".tsx", ".h", ".hpp", ".cpp", ".c", ".go"):
         test_file = resolved.with_suffix(ext)
         if test_file in files_set:
@@ -88,11 +116,21 @@ def resolve_relative_import(
 
 
 def build_dependency_graph(files: list[Path], root_dir: Path) -> dict[str, list[str]]:
-    """Build a dependency graph mapping files to their list of local dependencies."""
+    """
+    Construct a dependency graph mapping files to their local imports.
+
+    Analyzes Python AST structures or runs regex scanners on brace-delimited
+    languages. Traces relative imports to absolute scanned destinations.
+
+    :param files: List of processed source file paths.
+    :param root_dir: Root directory of the scanned project.
+    :return: Dictionary mapping relative file path keys to target lists.
+    """
     files_set = set(files)
     graph = {}
 
-    # Pre-map python files to module names for module-level absolute resolution
+    # Pre-maps python modules (e.g. `src.core.scanner` to Path) to resolve
+    # absolute import structures across Python packages.
     module_to_file = {}
     for f in files:
         if f.suffix.lower() == ".py":
@@ -119,7 +157,7 @@ def build_dependency_graph(files: list[Path], root_dir: Path) -> dict[str, list[
             for imp in imports:
                 if not imp:
                     continue
-                # 1. Try exact module match
+                # 1. Resolve direct module match
                 if imp in module_to_file:
                     target = module_to_file[imp]
                     try:
@@ -129,7 +167,7 @@ def build_dependency_graph(files: list[Path], root_dir: Path) -> dict[str, list[
                     if target_rel != rel_path and target_rel not in graph[rel_path]:
                         graph[rel_path].append(target_rel)
                     continue
-                # 2. Try prefix matches (handles sub-module imports)
+                # 2. Resolve submodule prefix matches (e.g. `package.submodule`)
                 for mod_name, target_file in module_to_file.items():
                     if mod_name.startswith(imp + ".") or imp.startswith(mod_name):
                         try:
@@ -156,7 +194,15 @@ def build_dependency_graph(files: list[Path], root_dir: Path) -> dict[str, list[
 
 
 def generate_tree_text(graph: dict[str, list[str]]) -> str:
-    """Generate a text-based tree representing code relationships."""
+    """
+    Generate an ASCII tree diagram representing code import hierarchies.
+
+    Detects roots (files that are not imported by any other files) to start
+    tree drawing. Runs a recursive DFS with cyclic dependency detection.
+
+    :param graph: Scanned dependency graph.
+    :return: A formatted ASCII representation of the dependency tree.
+    """
     if not graph:
         return "No dependencies found."
 
@@ -171,6 +217,7 @@ def generate_tree_text(graph: dict[str, list[str]]) -> str:
     visited = set()
 
     def print_node(node: str, prefix: str = "", is_last: bool = True):
+        # Prevent infinite loops in codebases containing circular imports.
         if node in visited:
             lines.append(f"{prefix}{'└── ' if is_last else '├── '}{node} (cycle)")
             return
@@ -194,11 +241,18 @@ def generate_tree_text(graph: dict[str, list[str]]) -> str:
 
 
 def generate_mermaid_flowchart(graph: dict[str, list[str]]) -> str:
-    """Generate a Mermaid diagram schema of code dependencies."""
+    """
+    Generate a Mermaid flowchart diagram schema of project imports.
+
+    Maps file paths to safe node IDs (e.g. `N0`, `N1`) to prevent characters like
+    slashes or dots from breaking the Mermaid parser syntax.
+
+    :param graph: Scanned dependency graph.
+    :return: Mermaid diagram code block.
+    """
     if not graph:
         return ""
 
-    # Check if there are any connections
     has_edges = any(targets for targets in graph.values())
     if not has_edges:
         return ""
