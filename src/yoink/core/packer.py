@@ -22,10 +22,28 @@ def pack_codebase(
     visualize: bool = True,
     max_file_size_kb: int = 100,
 ) -> str:
-    """Pack the selected files into a single structured markdown document."""
+    """
+    Pack selected project files into a single structured Markdown document.
+
+    Applies comment/whitespace stripping, sensitive information masking, compliance
+    scrubbing, and structural visualizations (dependency trees and graphs).
+
+    :param root_dir: Root directory of the scanned project.
+    :param files: List of resolved file paths to be packed.
+    :param strip_comments: Whether to prune comments and docstrings.
+    :param strip_whitespace: Whether to minify empty lines and spaces.
+    :param mask_sensitive: Whether to mask sensitive keys/secrets.
+    :param custom_secrets: User-defined secret patterns to match and mask.
+    :param compliance_patterns: User-defined compliance scrub mapping.
+    :param visualize: Whether to include dependency tree and flowchart.
+    :param max_file_size_kb: Size limit in KB; larger files are skipped.
+    :return: The packed codebase as a formatted Markdown string.
+    """
     root_path = Path(root_dir).resolve()
 
     # 1. Document Header
+    # We utilize short labels (# YP, Gen, Dir, Files, Tokens) instead of verbose
+    # strings to minimize token consumption of the pack header layout.
     lines = [
         "# YP",
         f"- Gen: {datetime.now().isoformat()}",
@@ -37,6 +55,8 @@ def pack_codebase(
         "",
     ]
 
+    # File List (FL) is always appended to serve as a reliable, predictable master
+    # index of all scanned files (including non-code files like README or configs).
     lines.append("## FL")
     for f in files:
         try:
@@ -47,6 +67,8 @@ def pack_codebase(
     lines.append("")
 
     # 2. Dependency Visualization
+    # When enabled, appends a text-based dependency tree (DT) and a Mermaid flowchart (VG)
+    # to provide the LLM with immediate architectural structure.
     if visualize:
         lines.append("## DT")
         graph = build_dependency_graph(files, root_path)
@@ -64,18 +86,22 @@ def pack_codebase(
             lines.append("")
 
     # 3. File Contents
+    # Appends each file's processed source code within clear start/end tag bounds.
     for f in files:
         try:
             rel = f.relative_to(root_path).as_posix()
         except ValueError:
             rel = f.as_posix()
 
-        # Check file size before reading
+        # Check file size prior to reading to avoid loading large datasets,
+        # binaries, or lockfiles that consume massive token budgets.
         try:
             file_size_kb = f.stat().st_size / 1024
             if file_size_kb > max_file_size_kb:
                 lines.append(f"#SF:{rel}")
-                lines.append(f"*File skipped: size ({file_size_kb:.1f} KB) exceeds limit ({max_file_size_kb} KB)*")
+                lines.append(
+                    f"*File skipped: size ({file_size_kb:.1f} KB) exceeds limit ({max_file_size_kb} KB)*"
+                )
                 lines.append(f"#EF:{rel}")
                 lines.append("")
                 continue
@@ -91,6 +117,8 @@ def pack_codebase(
         elif not lang:
             lang = "text"
 
+        # #SF: (Start File) and #EF: (End File) boundaries serve as clear,
+        # token-efficient delimiters for the LLM context.
         lines.append(f"#SF:{rel}")
 
         try:
@@ -115,4 +143,3 @@ def pack_codebase(
     draft = "\n".join(lines)
     token_count = count_tokens(draft)
     return draft.replace("{{TOKEN_COUNT}}", f"{token_count:,}")
-

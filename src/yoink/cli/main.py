@@ -9,7 +9,15 @@ from yoink.core.tokenizer import count_tokens
 
 
 def load_config(config_path: Path | None) -> dict:
-    """Load configuration from a JSON file."""
+    """
+    Load project configuration from a JSON file.
+
+    Handles config missing or invalid JSON formatting gracefully, falling back
+    to an empty dictionary structure.
+
+    :param config_path: Absolute or relative path to the config file.
+    :return: Loaded configuration settings.
+    """
     if not config_path:
         return {}
     if not config_path.exists():
@@ -25,6 +33,12 @@ def load_config(config_path: Path | None) -> dict:
 
 
 def main():
+    """
+    Execute the Yoink command-line interface entry point.
+
+    Parses CLI parameters, aggregates overrides, loads active JSON configuration,
+    scans target directories, and writes the packed markdown output.
+    """
     parser = argparse.ArgumentParser(
         description="Yoink: Pack your codebase into a single markdown file for LLM context."
     )
@@ -59,6 +73,8 @@ def main():
         type=int,
         help="Maximum file size in KB to pack (default: 100)",
     )
+    # We define both --no-visualize and --no-visualise to support both
+    # US and UK spellings interchangeably, keeping CLI usage friendly.
     parser.add_argument(
         "--no-visualize",
         "--no-visualise",
@@ -74,7 +90,8 @@ def main():
         print(f"Error: Target path '{target_path}' does not exist.", file=sys.stderr)
         sys.exit(1)
 
-    # Find config file
+    # Locates configuration file: command line parameter overrides,
+    # falling back to target folder JSON or workspace root.
     config_file = None
     if args.config:
         config_file = Path(args.config)
@@ -89,9 +106,10 @@ def main():
 
     config = load_config(config_file)
 
-    # ponytail: consolidated micro-knob cleaning parameters into a single --raw override.
-    # Why: Exposing every cleaning option as a CLI parameter leads to user confusion. Using --raw as a single
-    # global bypass allows users to easily choose raw output, while specific adjustments remain in the config.
+    # We consolidate multiple fine-grained formatting rules into a single
+    # --raw bypass. Exposing dozens of micro-parameters directly as flags
+    # clutters CLI output and leads to developer confusion, so specific
+    # rules remain inside the JSON config.
     if args.raw:
         strip_comments = False
         strip_whitespace = False
@@ -103,6 +121,7 @@ def main():
         strip_comments = config.get("strip_comments", True)
         strip_whitespace = config.get("strip_whitespace", True)
         mask_secrets_enabled = config.get("mask_secrets", True)
+        # Fallback to checking both spellings in the configuration structure.
         visualize = False if args.no_visualize else config.get("visualize", config.get("visualise", True))
         secret_patterns = config.get("secret_patterns", None)
         compliance_patterns = config.get("compliance_patterns", None)
@@ -113,7 +132,7 @@ def main():
 
     include_extensions = config.get("include_extensions", None)
 
-    # Scan files
+    # Scan and process target files.
     files = get_files_to_process(target_path, exclude_patterns, include_extensions)
     if not files:
         print("No matching files found.", file=sys.stderr)
@@ -136,7 +155,7 @@ def main():
         max_file_size_kb=max_file_size_kb,
     )
 
-    # Determine output
+    # Determine final output destination.
     output_path = args.output or config.get("output_file") or "yoink_output.md"
 
     if output_path == "-":
