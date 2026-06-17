@@ -1,8 +1,9 @@
 import os
+import re
 import sys
 import json
 from pathlib import Path
-from yoink.core.shield import censor_content, generate_pseudonym
+from yoink.core.shield import generate_pseudonym
 
 # ── Windows UTF-8 Bootstrap ──────────────────────────────────────────────────
 # Windows terminals often default to cp1252 which cannot render box-drawing
@@ -30,7 +31,6 @@ _UNICODE = _supports_unicode()
 RESET      = "\033[0m"
 BOLD       = "\033[1m"
 DIM        = "\033[2m"
-ITALIC     = "\033[3m"
 UNDERLINE  = "\033[4m"
 CYAN       = "\033[36m"
 GREEN      = "\033[32m"
@@ -38,9 +38,6 @@ YELLOW     = "\033[33m"
 RED        = "\033[31m"
 MAGENTA    = "\033[35m"
 WHITE      = "\033[97m"
-GRAY       = "\033[90m"
-BG_CYAN    = "\033[46m"
-BG_MAGENTA = "\033[45m"
 BLUE       = "\033[34m"
 
 # ── Box-Drawing Constants (with ASCII fallbacks) ─────────────────────────────
@@ -50,8 +47,6 @@ BOX_BL = "╰" if _UNICODE else "+"
 BOX_BR = "╯" if _UNICODE else "+"
 BOX_H  = "─" if _UNICODE else "-"
 BOX_V  = "│" if _UNICODE else "|"
-BOX_ML = "├" if _UNICODE else "+"
-BOX_MR = "┤" if _UNICODE else "+"
 
 # Unicode icons — degrade to plain-text labels on limited terminals.
 ICON_SHIELD   = "🛡️ " if _UNICODE else "[*]"
@@ -66,8 +61,7 @@ ICON_CROSS    = "✖" if _UNICODE else "x"
 ICON_ARROW    = "→" if _UNICODE else "->"
 ICON_DOT      = "●" if _UNICODE else "*"
 ICON_SPARKLE  = "✦" if _UNICODE else ">"
-ICON_LOCK     = "🔒" if _UNICODE else "[L]"
-ICON_MAPPING  = "🔀" if _UNICODE else "[M]"
+
 
 # Layout width for the main box frame.
 BOX_WIDTH = 56
@@ -75,19 +69,9 @@ BOX_WIDTH = 56
 
 # ── Helper Utilities ──────────────────────────────────────────────────────────
 
-def _box_top(title: str = "") -> str:
-    """Render the top edge of a box, optionally embedding a centered title."""
-    if title:
-        pad = BOX_WIDTH - len(title) - 4
-        left = pad // 2
-        right = pad - left
-        return f"{CYAN}{BOX_TL}{BOX_H * left} {BOLD}{WHITE}{title}{RESET}{CYAN} {BOX_H * right}{BOX_TR}{RESET}"
+def _box_top() -> str:
+    """Render the top edge of a box."""
     return f"{CYAN}{BOX_TL}{BOX_H * BOX_WIDTH}{BOX_TR}{RESET}"
-
-
-def _box_mid() -> str:
-    """Render a mid-row horizontal divider inside a box."""
-    return f"{CYAN}{BOX_ML}{BOX_H * BOX_WIDTH}{BOX_MR}{RESET}"
 
 
 def _box_bottom() -> str:
@@ -105,22 +89,13 @@ def _box_row(text: str, align: str = "left") -> str:
     :param text: The visible content of this row.
     :param align: 'left' or 'center'.
     """
-    # Strip ANSI for accurate visible-length calculation.
-    import re
     visible = re.sub(r"\033\[[0-9;]*m", "", text)
-    padding = BOX_WIDTH - 2 - len(visible)
-    if padding < 0:
-        padding = 0
+    padding = max(0, BOX_WIDTH - 2 - len(visible))
     if align == "center":
         left = padding // 2
         right = padding - left
         return f"{CYAN}{BOX_V}{RESET} {' ' * left}{text}{' ' * right} {CYAN}{BOX_V}{RESET}"
     return f"{CYAN}{BOX_V}{RESET} {text}{' ' * padding} {CYAN}{BOX_V}{RESET}"
-
-
-def _label(key: str, value: str) -> str:
-    """Format a key-value pair with dimmed key and highlighted value."""
-    return f"  {DIM}{key}{RESET}  {value}"
 
 
 def _pill(text: str, color: str) -> str:
@@ -228,7 +203,7 @@ def _section(title: str):
 
 # ── Config Persistence ────────────────────────────────────────────────────────
 
-def save_config(config_path: Path, config: dict):
+def save_config(config_path: Path, config: dict) -> bool:
     """
     Auto-save the active censorship configuration.
 
@@ -237,6 +212,7 @@ def save_config(config_path: Path, config: dict):
 
     :param config_path: Configuration file path.
     :param config: The configuration dict.
+    :return: True if the save succeeded, False otherwise.
     """
     try:
         orig_config = {}
@@ -248,8 +224,10 @@ def save_config(config_path: Path, config: dict):
         orig_config["pseudonym_masking"] = config["pseudonym_masking"]
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(orig_config, f, indent=2)
+        return True
     except Exception as e:
         _error(f"Auto-save failed: {e}")
+        return False
 
 
 # ── Interactive TUI Loop ──────────────────────────────────────────────────────
@@ -270,8 +248,8 @@ def run_censor_tui(config_path: Path, target_path: Path):
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
-        except Exception:
-            pass
+        except Exception as e:
+            _warn(f"Could not load {config_path}: {e}. Using defaults.")
 
     # Ensure lists exist in config
     if "censor_words" not in config:
@@ -294,7 +272,7 @@ def run_censor_tui(config_path: Path, target_path: Path):
 
         if choice == "1":
             _section("Add Words")
-            print(f"  Enter project names, company names, or IP to censor.")
+            print("  Enter project names, company names, or IP to censor.")
             word_input = input(f"  {DIM}Words (comma-separated):{RESET} ").strip()
             if word_input:
                 new_words = [w.strip() for w in word_input.split(",") if w.strip()]
@@ -309,8 +287,8 @@ def run_censor_tui(config_path: Path, target_path: Path):
                         else:
                             print(f"     {GREEN}{ICON_CHECK}{RESET} {w} {DIM}{ICON_ARROW}{RESET} {YELLOW}[REDACTED]{RESET}")
                 if added_count > 0:
-                    save_config(config_path, config)
-                    _success(f"Added {added_count} word(s) — auto-saved.")
+                    if save_config(config_path, config):
+                        _success(f"Added {added_count} word(s) — auto-saved.")
                 else:
                     _warn("All words already exist in the list.")
             else:
@@ -318,7 +296,7 @@ def run_censor_tui(config_path: Path, target_path: Path):
 
         elif choice == "2":
             _section("Add Domains")
-            print(f"  Enter internal domain roots (e.g. internal.net, intranet.corp).")
+            print("  Enter internal domain roots (e.g. internal.net, intranet.corp).")
             domain_input = input(f"  {DIM}Domains (comma-separated):{RESET} ").strip()
             if domain_input:
                 new_domains = [d.strip() for d in domain_input.split(",") if d.strip()]
@@ -333,8 +311,8 @@ def run_censor_tui(config_path: Path, target_path: Path):
                         else:
                             print(f"     {GREEN}{ICON_CHECK}{RESET} {d} {DIM}{ICON_ARROW}{RESET} {YELLOW}[REDACTED_DOMAIN]{RESET}")
                 if added_count > 0:
-                    save_config(config_path, config)
-                    _success(f"Added {added_count} domain(s) — auto-saved.")
+                    if save_config(config_path, config):
+                        _success(f"Added {added_count} domain(s) — auto-saved.")
                 else:
                     _warn("All domains already exist in the list.")
             else:
@@ -368,8 +346,8 @@ def run_censor_tui(config_path: Path, target_path: Path):
                         config["censor_words"].remove(name)
                     else:
                         config["censor_domains"].remove(name)
-                    save_config(config_path, config)
-                    _success(f"Removed {type_} '{name}' — auto-saved.")
+                    if save_config(config_path, config):
+                        _success(f"Removed {type_} '{name}' — auto-saved.")
                 else:
                     _error("Invalid selection.")
             except ValueError:
@@ -377,11 +355,11 @@ def run_censor_tui(config_path: Path, target_path: Path):
 
         elif choice == "4":
             config["pseudonym_masking"] = not config["pseudonym_masking"]
-            save_config(config_path, config)
-            if config["pseudonym_masking"]:
-                _success("Pseudonym masking ENABLED — names get deterministic aliases.")
-            else:
-                _warn("Pseudonym masking DISABLED — names will be [REDACTED].")
+            if save_config(config_path, config):
+                if config["pseudonym_masking"]:
+                    _success("Pseudonym masking ENABLED — names get deterministic aliases.")
+                else:
+                    _warn("Pseudonym masking DISABLED — names will be [REDACTED].")
 
         elif choice == "0":
             print(f"\n  {DIM}{ICON_EXIT} Goodbye!{RESET}\n")
@@ -416,7 +394,7 @@ def run_censor_init(config_path: Path):
     try:
         # 1. Prompt for words
         _section("Step 1 — Censor Words")
-        print(f"  Proprietary names, internal projects, company names.")
+        print("  Proprietary names, internal projects, company names.")
         print(f"  {DIM}Enter one per line. Empty line to continue.{RESET}")
         print()
         idx = 1
@@ -430,7 +408,7 @@ def run_censor_init(config_path: Path):
 
         # 2. Prompt for domains
         _section("Step 2 — Censor Domains")
-        print(f"  Internal domain roots (e.g. internal.net, intranet.corp).")
+        print("  Internal domain roots (e.g. internal.net, intranet.corp).")
         print(f"  {DIM}Enter one per line. Empty line to continue.{RESET}")
         print()
         idx = 1
@@ -444,8 +422,8 @@ def run_censor_init(config_path: Path):
 
         # 3. Prompt for pseudonym masking
         _section("Step 3 — Pseudonym Masking")
-        print(f"  When enabled, censored terms get deterministic aliases")
-        print(f"  instead of generic [REDACTED] tags.")
+        print("  When enabled, censored terms get deterministic aliases")
+        print("  instead of generic [REDACTED] tags.")
         print()
         pseudo_input = input(f"  {DIM}Enable Pseudonym Masking? (Y/n):{RESET} ").strip().lower()
         if pseudo_input in ("n", "no", "false"):
@@ -457,8 +435,8 @@ def run_censor_init(config_path: Path):
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
-            except Exception:
-                pass
+            except Exception as e:
+                _warn(f"Could not load {config_path}: {e}. Starting fresh.")
 
         config["censor_words"] = censor_words
         config["censor_domains"] = censor_domains

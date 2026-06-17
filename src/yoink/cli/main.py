@@ -123,7 +123,11 @@ def main():
         if test_cfg.exists():
             config_file = test_cfg
         else:
-            config_file = test_cfg
+            # Workspace-root fallback: try CWD config when the target
+            # directory itself doesn't contain one.
+            workspace_cfg = Path(".yoinkconfig.json").resolve()
+            config_file = workspace_cfg if workspace_cfg.exists() else None
+
 
 
     config = load_config(config_file)

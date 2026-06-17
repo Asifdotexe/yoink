@@ -178,7 +178,7 @@ def _get_domain_regex(domain: str) -> re.Pattern:
     """
     if domain not in _DOMAIN_REGEX_CACHE:
         _DOMAIN_REGEX_CACHE[domain] = re.compile(
-            r"\b([a-zA-Z0-9.-]+\.)?" + re.escape(domain) + r"\b", re.IGNORECASE
+            r"\b([a-zA-Z0-9.-]+\.)?" + re.escape(domain) + r"(?![a-zA-Z0-9.-])", re.IGNORECASE
         )
     return _DOMAIN_REGEX_CACHE[domain]
 
@@ -203,7 +203,8 @@ def censor_content(
     """
     # 1. Censor specific words/identifiers
     for word in censor_words or []:
-        if not word.strip():
+        word = word.strip()
+        if not word:
             continue
 
         replacement = generate_pseudonym(word) if pseudonym_masking else "[REDACTED]"
@@ -237,7 +238,8 @@ def censor_content(
 
     # 2. Censor domains (preserving subdomains if using pseudonyms)
     for domain in censor_domains or []:
-        if not domain.strip():
+        domain = domain.strip()
+        if not domain:
             continue
 
         pattern = _get_domain_regex(domain)
