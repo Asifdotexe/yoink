@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "yoinky"
-version = "1.2.0"
+version = "1.2.1"
 description = "Pack your codebase into a single markdown file for LLM context, with comment stripping, secret masking, and dependency trees."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "GNU AGPLv3" }
 authors = [
-    { name = "Asif Sayyed", email = "asifdotexe@gmail.com" }
+    { name = "Asif Sayyed", email = "hello@sayyedasif.com" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
