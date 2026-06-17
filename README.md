@@ -91,7 +91,7 @@ Pack raw codebase contents while skipping test folders:
 yoink . --raw --exclude-tests
 ```
 
-### 💡 Token Optimization Tips
+### Token Optimization Tips
 If you need to minimize your prompt token usage to the absolute limit, follow these rules:
 1. Exclude test files by running with `--exclude-tests` (unless you need the LLM to write or refactor tests).
 2. Turn off dependency visualization by running with `--no-visualize` or `--no-visualise` (or setting `"visualize": false` or `"visualise": false` in `.yoinkconfig.json`) to avoid tree formatting token overhead.

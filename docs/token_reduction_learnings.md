@@ -84,3 +84,28 @@ Accidentally packing a database dump, log file, build asset, or heavy lock file 
 | **Max File Size Limits** | Data, Logs, Lock Files | **Up to 95%** on heavy repos | **Zero** (prevents garbage-in/garbage-out context pollution). |
 | **Whitespace Stripping** | All files | **10% – 20%** | **Zero** (LLMs read code indentation perfectly without extra empty lines). |
 | **Condensed Tags + Legend** | Document Structure | **1% – 5%** | **Zero** (the legend teaches the LLM how to parse the boundaries). |
+
+---
+
+## 4. Key Performance & Architecture Learnings
+
+During optimization and development cycles, we discovered several technical lessons that are highly valuable for onboarding developers:
+
+### Pre-compiling Regexes Globally
+* **Finding:** In python, invoking `re.compile` or `re.sub(pattern_string, ...)` inside loop structures (e.g. over hundreds of files) causes lookup and compilation overhead. 
+* **Fix:** Define all regex patterns globally at the module level using `re.compile`. 
+* **Result:** **1.20x to 1.26x speedup** on file scanning, masking, and comment-stripping execution.
+
+### Fast Directory Pruning during `os.walk`
+* **Finding:** Scanning directories recursively can hit disk I/O bottlenecks if we enter ignored directories like `node_modules` or `.venv` and filter files afterward.
+* **Fix:** Modify `dirnames[:]` in-place inside `os.walk` loops to prune ignored sub-directories before walk visits them.
+* **Result:** Drastic performance gains on large source repositories.
+
+### Predictable Schema Design for LLMs
+* **Finding:** Initially, the File List (`FL`) section was omitted when the Dependency Tree (`DT`) was active. However, this caused an unpredictable layout schema and left non-code files (like `README.md` or configuration files which don't have imports) completely un-indexed.
+* **Fix:** Sticking to a consistent layout structure is superior. We now always include the `FL` flat file index at the top, and optionally append the `DT` and `VG` (Visual Graph) architectural structures below it.
+
+### Regional Spelling DX Compatibility
+* **Finding:** Developers have different spelling habits for terms like `visualize` vs `visualise`. 
+* **Fix:** CLI options share destinations (e.g., `--no-visualize` and `--no-visualise` sharing `dest="no_visualize"`) and configuration lookups check both spelling keys. This provides a much smoother developer experience.
+
