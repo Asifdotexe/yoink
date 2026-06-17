@@ -54,6 +54,18 @@ def main():
         "--config",
         help="Path to config file (default: .yoinkconfig.json in target directory)",
     )
+    parser.add_argument(
+        "--max-size",
+        type=int,
+        help="Maximum file size in KB to pack (default: 100)",
+    )
+    parser.add_argument(
+        "--no-visualize",
+        "--no-visualise",
+        action="store_true",
+        dest="no_visualize",
+        help="Disable dependency tree and graph visualization",
+    )
 
     args = parser.parse_args()
 
@@ -91,7 +103,7 @@ def main():
         strip_comments = config.get("strip_comments", True)
         strip_whitespace = config.get("strip_whitespace", True)
         mask_secrets_enabled = config.get("mask_secrets", True)
-        visualize = config.get("visualize", True)
+        visualize = False if args.no_visualize else config.get("visualize", config.get("visualise", True))
         secret_patterns = config.get("secret_patterns", None)
         compliance_patterns = config.get("compliance_patterns", None)
 
@@ -109,6 +121,8 @@ def main():
 
     print(f"Yoinking {len(files)} files...", file=sys.stderr)
 
+    max_file_size_kb = args.max_size or config.get("max_file_size_kb", 100)
+
     # Pack codebase
     packed_md = pack_codebase(
         root_dir=target_path if target_path.is_dir() else target_path.parent,
@@ -119,6 +133,7 @@ def main():
         custom_secrets=secret_patterns,
         compliance_patterns=compliance_patterns,
         visualize=visualize,
+        max_file_size_kb=max_file_size_kb,
     )
 
     # Determine output

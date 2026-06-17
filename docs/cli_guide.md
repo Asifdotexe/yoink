@@ -44,6 +44,8 @@ yoink /path/to/project -o -
 | `--output` | `-o` | Output file path (or `-` for stdout). |
 | `--config` | `-c` | Path to a custom `.yoinkconfig.json` configuration file. |
 | `--exclude-tests` | | Exclude test files and directories from the packing output. |
+| `--max-size` | | Maximum file size in KB to pack (default: 100). |
+| `--no-visualize`, `--no-visualise` | | Disable dependency tree and graph visualization. |
 | `--raw` | | Disables all processing (comment, whitespace, secret, compliance, dependency trees) and packs files exactly as they are. |
 
 ## Examples

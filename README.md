@@ -70,6 +70,8 @@ yoink [path] [flags]
 | `-o`, `--output` | | Output file path (default: `yoink_output.md` or `-` for stdout). |
 | `-c`, `--config` | | Path to custom configuration file. |
 | `--exclude-tests` | | Exclude test files and test directories from scanning. |
+| `--max-size` | | Maximum file size in KB to pack (default: 100). |
+| `--no-visualize`, `--no-visualise` | | Disable dependency tree and graph visualization. |
 | `--raw` | | Disables all processing (comment, whitespace, secret, compliance, dependency trees) and packs files exactly as they are. |
 
 #### Examples
@@ -88,6 +90,15 @@ Pack raw codebase contents while skipping test folders:
 ```bash
 yoink . --raw --exclude-tests
 ```
+
+### 💡 Token Optimization Tips
+If you need to minimize your prompt token usage to the absolute limit, follow these rules:
+1. Exclude test files by running with `--exclude-tests` (unless you need the LLM to write or refactor tests).
+2. Turn off dependency visualization by running with `--no-visualize` or `--no-visualise` (or setting `"visualize": false` or `"visualise": false` in `.yoinkconfig.json`) to avoid tree formatting token overhead.
+3. Skip large files, lockfiles, or dataset files by running with `--max-size 50` (or lower).
+4. Keep default comment and whitespace stripping enabled (do not run with `--raw`) to strip all docstrings, comments, empty lines, and copyright headers.
+
+
 
 ---
 
