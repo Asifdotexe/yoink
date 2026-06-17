@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="assets/yoink.png" alt="Yoink Logo" width="300" />
+  <img src="https://raw.githubusercontent.com/Asifdotexe/yoink/main/assets/yoink.png" alt="Yoink Logo" width="300" />
 </p>
 
 <h1 align="center">Yoink</h1>
 
 <p align="center">
   <a href="https://github.com/Asifdotexe/yoink/actions/workflows/ci.yml"><img src="https://github.com/Asifdotexe/yoink/actions/workflows/ci.yml/badge.svg" alt="Python CI" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3" /></a>
+  <a href="https://github.com/Asifdotexe/yoink/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3" /></a>
 </p>
 
 Yoink is a command-line tool and FastAPI backend designed to bundle, sanitize, and visualize codebases for Large Language Model (LLM) contexts. It converts raw project directories into structured Markdown documents, optimizing token consumption and preventing compliance and security leaks.
