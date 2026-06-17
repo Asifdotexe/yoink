@@ -17,7 +17,7 @@ Yoink is a command-line tool and FastAPI backend designed to bundle, sanitize, a
 
 * **Token Shredder:** Safely strips comments, docstrings, and excess whitespace to reduce prompt size.
 * **Secret Shield:** Programmatically redacts credentials, private keys, emails, and IP addresses.
-* **Compliance Stripper:** Replaces corporate endpoints or proprietary trademarks with generic labels.
+* **Compliance Stripper & Masking:** Redacts proprietary terms and internal domains using deterministic, token-efficient phonetic codenames (e.g. `Delta7`) to keep code syntax compilable. Features an interactive terminal UI (TUI) to configure and live-test rules in a sandbox.
 * **Dependency Trees:** Automatically generates AST-based ASCII dependency trees and Mermaid flowcharts.
 
 ---
@@ -38,11 +38,35 @@ pip install -e .
 
 ---
 
+## Quick Start
+
+### 1. Pack a Codebase
+Pack the current directory:
+```bash
+yoink
+```
+
+### 2. Configure Censor Lists (CLI / TUI)
+* **Initialize rules (like `poetry init`):**
+  ```bash
+  yoink censor init
+  ```
+* **Inspect active codename mappings (e.g., `Theseus -> Delta7`):**
+  ```bash
+  yoink censor show
+  ```
+* **Launch interactive dashboard & sandbox:**
+  ```bash
+  yoink --censor-tui
+  ```
+
+---
+
 ## Documentation
 
 For detailed instructions and references, please refer to the dedicated guides:
 
-* **[CLI Usage Guide](docs/cli_guide.md):** Complete reference of CLI commands, flags (`--raw`, `--max-size`, `--no-visualize`, etc.), and usage examples.
+* **[CLI Usage Guide](docs/cli_guide.md):** Complete reference of CLI commands, flags (`--raw`, `--max-size`, `--no-visualize`, `--censor`, `--censor-tui`, etc.), and usage examples.
 * **[REST API Guide](docs/api_guide.md):** Detailed guide to API endpoints, schema structures, and Render blueprint web service deployment.
 * **[Token Reduction Learnings](docs/token_reduction_learnings.md):** Technical reference on how BPE tokenizers handle whitespace, license header stripping, and performance tuning.
 

@@ -19,6 +19,9 @@ def pack_codebase(
     mask_sensitive: bool = True,
     custom_secrets: dict[str, str] = None,
     compliance_patterns: dict[str, str] = None,
+    censor_words: list[str] = None,
+    censor_domains: list[str] = None,
+    pseudonym_masking: bool = True,
     visualize: bool = True,
     max_file_size_kb: int = 100,
 ) -> str:
@@ -128,6 +131,14 @@ def pack_codebase(
             content = shred_code(content, f.name, strip_comments, strip_whitespace)
             if mask_sensitive:
                 content = mask_secrets(content, custom_secrets)
+            if censor_words or censor_domains:
+                from yoink.core.shield import censor_content
+                content = censor_content(
+                    content,
+                    censor_words=censor_words,
+                    censor_domains=censor_domains,
+                    pseudonym_masking=pseudonym_masking,
+                )
             if compliance_patterns:
                 content = strip_compliance(content, compliance_patterns)
 

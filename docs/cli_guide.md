@@ -73,3 +73,23 @@ Packs the project but ignores files matching test directories or patterns:
 ```bash
 yoink . --exclude-tests
 ```
+
+### Censor Subcommands
+
+#### 1. Initialize Masking Rules (`yoink censor init`)
+Runs a step-by-step interactive CLI initialization questionnaire (similar to `poetry init`) to define initial lists of proprietary words and internal domains to mask, saving them to `.yoinkconfig.json`:
+```bash
+yoink censor init
+```
+
+#### 2. Show Active Codename Mappings (`yoink censor show`)
+Displays a structured list of configured words/domains along with their resolved, deterministic pseudonyms (e.g., mapping `Theseus -> Delta7` or `internal.net -> delta7.local`), allowing you to review active masking maps:
+```bash
+yoink censor show
+```
+
+#### 3. Interactive Masking Dashboard (`yoink censor tui`)
+Launches the interactive terminal user interface (TUI) dashboard to configure masking lists, toggle settings, and test replacements live in a sandbox:
+```bash
+yoink censor tui
+```
