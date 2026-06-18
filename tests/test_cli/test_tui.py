@@ -7,12 +7,10 @@ from yoink.cli.tui import run_censor_tui
 
 def test_tui_flow_toggle_and_save(tmp_path):
     config_file = tmp_path / ".yoinkconfig.json"
-    
-    # Mock inputs:
-    # 4: Toggle pseudonym masking (auto-saves config)
-    # 0: Exit
-    inputs = ["4", "0"]
-    
+
+    # Numbered fallback (non-TTY): 3 = Toggle pseudonym masking, 4 = Exit
+    inputs = ["3", "4"]
+
     with patch("builtins.input", side_effect=inputs):
         with pytest.raises(SystemExit) as e:
             run_censor_tui(config_file, tmp_path)
@@ -26,13 +24,10 @@ def test_tui_flow_toggle_and_save(tmp_path):
 
 def test_tui_flow_add_words_and_save(tmp_path):
     config_file = tmp_path / ".yoinkconfig.json"
-    
-    # Mock inputs:
-    # 1: Add words (auto-saves config)
-    # "Google, Microsoft"
-    # 0: Exit
-    inputs = ["1", "Google, Microsoft", "0"]
-    
+
+    # Numbered fallback (non-TTY): 0 = Add words, then word input, 4 = Exit
+    inputs = ["0", "Google, Microsoft", "4"]
+
     with patch("builtins.input", side_effect=inputs):
         with pytest.raises(SystemExit) as e:
             run_censor_tui(config_file, tmp_path)
@@ -47,16 +42,16 @@ def test_tui_flow_add_words_and_save(tmp_path):
 
 def test_censor_init_flow(tmp_path):
     config_file = tmp_path / ".yoinkconfig.json"
-    
+
     # 1. Censor word: Theseus, then Enter
     # 2. Censor domain: internal.net, then Enter
     # 3. Enable pseudonym masking: Y
     inputs = ["Theseus", "", "internal.net", "", "y"]
-    
+
     from yoink.cli.tui import run_censor_init
     with patch("builtins.input", side_effect=inputs):
         run_censor_init(config_file)
-        
+
     assert config_file.exists()
     with open(config_file, "r") as f:
         data = json.load(f)
@@ -70,15 +65,15 @@ def test_censor_show_flow(tmp_path, capsys):
     config_file.write_text(
         '{"censor_words": ["Theseus"], "censor_domains": ["internal.net"], "pseudonym_masking": true}'
     )
-    
+
     from yoink.cli.tui import run_censor_show
     run_censor_show(config_file)
-    
+
     captured = capsys.readouterr()
     assert "Active Masking Rules" in captured.out
     assert "Theseus" in captured.out
     assert "internal.net" in captured.out
-    
+
     # Check that deterministic pseudonym appears in show
     from yoink.core.shield import generate_pseudonym
     pseudo = generate_pseudonym("Theseus")
