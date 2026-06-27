@@ -39,6 +39,27 @@ def main():
     Parses CLI parameters, aggregates overrides, loads active JSON configuration,
     scans target directories, and writes the packed markdown output.
     """
+    # Handle 'censor' subcommands: init / show / tui
+    if len(sys.argv) > 1 and sys.argv[1] == "censor":
+        subcommand = sys.argv[2] if len(sys.argv) > 2 else ""
+        if subcommand not in ("init", "show", "tui"):
+            print("Error: Unknown censor command. Available: 'init', 'show', 'tui'", file=sys.stderr)
+            sys.exit(1)
+
+        config_file = Path(".yoinkconfig.json")
+        if subcommand == "init":
+            from yoink.cli.tui import run_censor_init
+            run_censor_init(config_file)
+            sys.exit(0)
+        elif subcommand == "show":
+            from yoink.cli.tui import run_censor_show
+            run_censor_show(config_file)
+            sys.exit(0)
+        elif subcommand == "tui":
+            from yoink.cli.tui import run_censor_tui
+            run_censor_tui(config_file, Path("."))
+            sys.exit(0)
+
     parser = argparse.ArgumentParser(
         description="Yoink: Pack your codebase into a single markdown file for LLM context."
     )
@@ -73,8 +94,6 @@ def main():
         type=int,
         help="Maximum file size in KB to pack (default: 100)",
     )
-    # We define both --no-visualize and --no-visualise to support both
-    # US and UK spellings interchangeably, keeping CLI usage friendly.
     parser.add_argument(
         "--no-visualize",
         "--no-visualise",
@@ -103,6 +122,13 @@ def main():
         )
         if test_cfg.exists():
             config_file = test_cfg
+        else:
+            # Workspace-root fallback: try CWD config when the target
+            # directory itself doesn't contain one.
+            workspace_cfg = Path(".yoinkconfig.json").resolve()
+            config_file = workspace_cfg if workspace_cfg.exists() else None
+
+
 
     config = load_config(config_file)
 
@@ -116,6 +142,9 @@ def main():
         mask_secrets_enabled = False
         secret_patterns = None
         compliance_patterns = None
+        censor_words = None
+        censor_domains = None
+        pseudonym_masking = True
         visualize = False
     else:
         strip_comments = config.get("strip_comments", True)
@@ -125,6 +154,10 @@ def main():
         visualize = False if args.no_visualize else config.get("visualize", config.get("visualise", True))
         secret_patterns = config.get("secret_patterns", None)
         compliance_patterns = config.get("compliance_patterns", None)
+        censor_words = config.get("censor_words", None)
+        censor_domains = config.get("censor_domains", None)
+        pseudonym_masking = config.get("pseudonym_masking", True)
+
 
     exclude_patterns = config.get("exclude_patterns") or []
     if args.exclude_tests:
@@ -151,6 +184,9 @@ def main():
         mask_sensitive=mask_secrets_enabled,
         custom_secrets=secret_patterns,
         compliance_patterns=compliance_patterns,
+        censor_words=censor_words,
+        censor_domains=censor_domains,
+        pseudonym_masking=pseudonym_masking,
         visualize=visualize,
         max_file_size_kb=max_file_size_kb,
     )

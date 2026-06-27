@@ -95,5 +95,55 @@ def test_cli_default_visualize(tmp_path):
     assert "## DT" in content
 
 
+def test_cli_config_censor(tmp_path):
+    test_file = tmp_path / "app.py"
+    test_file.write_text("def connect_to_google():\n    return 'http://db.internal.net'")
+    config_file = tmp_path / ".yoinkconfig.json"
+    config_file.write_text('{"censor_words": ["Google"], "censor_domains": ["internal.net"]}')
+    output_file = tmp_path / "output.md"
+
+    with patch("sys.argv", ["yoink", str(test_file), "-o", str(output_file), "-c", str(config_file)]):
+        main()
+
+    assert output_file.exists()
+    content = output_file.read_text()
+    assert "Google" not in content
+    assert "internal.net" not in content
+    
+    from yoink.core.shield import generate_pseudonym
+    google_pseudo = generate_pseudonym("Google")
+    assert f"connect_to_{google_pseudo}" in content
+
+
+def test_cli_censor_tui_call():
+    with patch("sys.argv", ["yoink", "censor", "tui"]), \
+         patch("yoink.cli.tui.run_censor_tui") as mock_tui:
+        try:
+            main()
+        except SystemExit as e:
+            assert e.code == 0
+        mock_tui.assert_called_once()
+
+
+def test_cli_censor_init_call():
+    with patch("sys.argv", ["yoink", "censor", "init"]), \
+         patch("yoink.cli.tui.run_censor_init") as mock_init:
+        try:
+            main()
+        except SystemExit as e:
+            assert e.code == 0
+        mock_init.assert_called_once()
+
+
+def test_cli_censor_show_call():
+    with patch("sys.argv", ["yoink", "censor", "show"]), \
+         patch("yoink.cli.tui.run_censor_show") as mock_show:
+        try:
+            main()
+        except SystemExit as e:
+            assert e.code == 0
+        mock_show.assert_called_once()
+
+
 
 
