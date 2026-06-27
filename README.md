@@ -47,6 +47,8 @@ yoink
 ```
 
 ### 2. Configure Censor Lists (CLI / TUI)
+Manage word and domain censorship with deterministic pseudonym generation (e.g., `Delta7`) and configuration persistence via `.yoinkconfig.json`:
+
 * **Initialize rules (like `poetry init`):**
   ```bash
   yoink censor init
@@ -57,8 +59,9 @@ yoink
   ```
 * **Launch interactive dashboard & sandbox:**
   ```bash
-  yoink --censor-tui
+  yoink censor tui
   ```
+
 
 ---
 

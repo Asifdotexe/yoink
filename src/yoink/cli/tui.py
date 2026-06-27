@@ -39,6 +39,13 @@ RED        = "\033[31m"
 MAGENTA    = "\033[35m"
 WHITE      = "\033[97m"
 BLUE       = "\033[34m"
+INVERSE    = "\033[7m"
+
+# ANSI cursor control sequences.
+HIDE_CURSOR = "\033[?25l"
+SHOW_CURSOR = "\033[?25h"
+CLEAR_LINE  = "\033[2K"
+MOVE_UP     = "\033[{}A"
 
 # ── Box-Drawing Constants (with ASCII fallbacks) ─────────────────────────────
 BOX_TL = "╭" if _UNICODE else "+"
@@ -61,10 +68,274 @@ ICON_CROSS    = "✖" if _UNICODE else "x"
 ICON_ARROW    = "→" if _UNICODE else "->"
 ICON_DOT      = "●" if _UNICODE else "*"
 ICON_SPARKLE  = "✦" if _UNICODE else ">"
-
+ICON_POINTER  = "❯" if _UNICODE else ">"
 
 # Layout width for the main box frame.
 BOX_WIDTH = 56
+
+
+# ── Raw Keypress Reading ─────────────────────────────────────────────────────
+
+def _is_real_tty() -> bool:
+    """Return True when stdin is an interactive terminal (not mocked or piped)."""
+    try:
+        return hasattr(sys.stdin, "fileno") and os.isatty(sys.stdin.fileno())
+    except Exception:
+        return False
+
+
+def _read_key() -> str:
+    """
+    Read a single keypress from the terminal without echoing.
+
+    Returns simple strings for special keys:
+    'up', 'down', 'enter', 'q', or the literal character pressed.
+    Uses msvcrt on Windows and tty/termios on Unix.
+    """
+    if os.name == "nt":
+        import msvcrt
+        ch = msvcrt.getwch()
+        if ch in ("\r", "\n"):
+            return "enter"
+        if ch == "\x1b":
+            return "q"
+        if ch in ("\x00", "\xe0"):
+            # Arrow keys produce a two-byte sequence on Windows.
+            ch2 = msvcrt.getwch()
+            if ch2 == "H":
+                return "up"
+            if ch2 == "P":
+                return "down"
+            return ""
+        return ch
+    else:
+        import tty
+        import termios
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+            if ch == "\r" or ch == "\n":
+                return "enter"
+            if ch == "\x1b":
+                ch2 = sys.stdin.read(1)
+                if ch2 == "[":
+                    ch3 = sys.stdin.read(1)
+                    if ch3 == "A":
+                        return "up"
+                    if ch3 == "B":
+                        return "down"
+                return "q"
+            return ch
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+# ── Arrow-Key Select Menu ────────────────────────────────────────────────────
+
+def _arrow_select(options: list[tuple[str, str]], title: str = "Actions") -> int:
+    """
+    Render an interactive arrow-key menu and return the selected index.
+
+    Each option is a tuple of (icon, label). The user navigates with
+    arrow keys and confirms with Enter. Falls back to numbered input()
+    when stdin is not a real TTY (e.g. in tests or piped input).
+
+    :param options: List of (icon, label) tuples.
+    :param title: Header text above the menu.
+    :return: Index of the selected option.
+    """
+    if not _is_real_tty():
+        # Fallback: numbered input for non-interactive contexts (tests).
+        return _numbered_select(options, title)
+
+    cursor = 0
+    total = len(options)
+
+    def _render():
+        """Draw the menu options with the cursor highlight."""
+        lines = []
+        lines.append(f"  {BOLD}{WHITE}{title}{RESET}")
+        lines.append("")
+        for i, (icon, label) in enumerate(options):
+            if i == cursor:
+                lines.append(f"  {CYAN}{BOLD} {ICON_POINTER} {icon}  {label}{RESET}")
+            else:
+                lines.append(f"    {DIM}{icon}  {label}{RESET}")
+        lines.append("")
+        lines.append(f"  {DIM}↑↓ navigate  ⏎ select  q quit{RESET}")
+        return lines
+
+    # Initial render
+    sys.stdout.write(HIDE_CURSOR)
+    sys.stdout.flush()
+    rendered = _render()
+    for line in rendered:
+        sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+    try:
+        while True:
+            key = _read_key()
+            if key == "up":
+                cursor = (cursor - 1) % total
+            elif key == "down":
+                cursor = (cursor + 1) % total
+            elif key == "enter":
+                # Erase the menu, then show final selection
+                sys.stdout.write(MOVE_UP.format(len(rendered)))
+                for _ in rendered:
+                    sys.stdout.write(CLEAR_LINE + "\n")
+                sys.stdout.write(MOVE_UP.format(len(rendered)))
+                icon, label = options[cursor]
+                sys.stdout.write(f"  {GREEN}{ICON_CHECK}{RESET} {icon}  {BOLD}{label}{RESET}\n")
+                sys.stdout.write(SHOW_CURSOR)
+                sys.stdout.flush()
+                return cursor
+            elif key == "q":
+                sys.stdout.write(SHOW_CURSOR)
+                sys.stdout.flush()
+                return len(options) - 1  # last option = Exit
+            else:
+                continue
+
+            # Re-render in place
+            sys.stdout.write(MOVE_UP.format(len(rendered)))
+            rendered = _render()
+            for line in rendered:
+                sys.stdout.write(CLEAR_LINE + "\r" + line + "\n")
+            sys.stdout.flush()
+    except (KeyboardInterrupt, EOFError):
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.flush()
+        return len(options) - 1
+
+
+def _numbered_select(options: list[tuple[str, str]], title: str) -> int:
+    """
+    Fallback menu using numbered text input (for tests and piped stdin).
+
+    :param options: List of (icon, label) tuples.
+    :param title: Header text above the menu.
+    :return: Index of the selected option.
+    """
+    print(f"  {BOLD}{WHITE}{title}{RESET}")
+    print()
+    for i, (icon, label) in enumerate(options):
+        print(f"    {BOLD}{CYAN}{i}{RESET} {DIM}│{RESET} {icon}  {label}")
+    print()
+    try:
+        choice = input(f"  {BOLD}{CYAN}{ICON_SPARKLE} Select option:{RESET} ").strip()
+    except (KeyboardInterrupt, EOFError):
+        return len(options) - 1
+    try:
+        idx = int(choice)
+        if 0 <= idx < len(options):
+            return idx
+    except ValueError:
+        pass
+    return -1  # invalid
+
+
+def _arrow_select_items(
+    items: list[tuple[str, str, str]], title: str = "Select"
+) -> int:
+    """
+    Arrow-key select for removal lists. Falls back to numbered input.
+
+    Each item is (tag_color, tag_label, name). Returns selected index
+    or -1 for cancel.
+
+    :param items: List of (tag_color, tag_label, name) tuples.
+    :param title: Header text.
+    :return: Selected index, or -1 if cancelled.
+    """
+    if not _is_real_tty():
+        # Fallback for tests
+        for idx, (color, tag, name) in enumerate(items, 1):
+            pill = f"{color}[{tag}]{RESET}"
+            print(f"    {BOLD}{CYAN}{idx}{RESET} {DIM}│{RESET} {pill} {name}")
+        print()
+        try:
+            choice = input(f"  {DIM}Select # to remove (Enter to cancel):{RESET} ").strip()
+            if not choice:
+                return -1
+            idx = int(choice) - 1
+            if 0 <= idx < len(items):
+                return idx
+        except (ValueError, KeyboardInterrupt, EOFError):
+            pass
+        return -1
+
+    cancel_label = f"{DIM}Cancel{RESET}"
+    cursor = 0
+    total = len(items) + 1  # +1 for cancel
+
+    def _render():
+        lines = []
+        lines.append(f"  {BOLD}{WHITE}{title}{RESET}")
+        lines.append("")
+        for i, (color, tag, name) in enumerate(items):
+            pill = f"{color}[{tag}]{RESET}"
+            if i == cursor:
+                lines.append(f"  {CYAN}{BOLD} {ICON_POINTER}{RESET} {pill} {name}")
+            else:
+                lines.append(f"    {pill} {name}")
+        # Cancel option
+        ci = len(items)
+        if cursor == ci:
+            lines.append(f"  {CYAN}{BOLD} {ICON_POINTER}{RESET}  {DIM}Cancel{RESET}")
+        else:
+            lines.append(f"     {DIM}Cancel{RESET}")
+        lines.append("")
+        lines.append(f"  {DIM}↑↓ navigate  ⏎ select  q cancel{RESET}")
+        return lines
+
+    sys.stdout.write(HIDE_CURSOR)
+    sys.stdout.flush()
+    rendered = _render()
+    for line in rendered:
+        sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+    try:
+        while True:
+            key = _read_key()
+            if key == "up":
+                cursor = (cursor - 1) % total
+            elif key == "down":
+                cursor = (cursor + 1) % total
+            elif key == "enter":
+                sys.stdout.write(MOVE_UP.format(len(rendered)))
+                for _ in rendered:
+                    sys.stdout.write(CLEAR_LINE + "\n")
+                sys.stdout.write(MOVE_UP.format(len(rendered)))
+                sys.stdout.write(SHOW_CURSOR)
+                sys.stdout.flush()
+                if cursor == len(items):
+                    return -1  # Cancel
+                return cursor
+            elif key == "q":
+                sys.stdout.write(MOVE_UP.format(len(rendered)))
+                for _ in rendered:
+                    sys.stdout.write(CLEAR_LINE + "\n")
+                sys.stdout.write(MOVE_UP.format(len(rendered)))
+                sys.stdout.write(SHOW_CURSOR)
+                sys.stdout.flush()
+                return -1
+            else:
+                continue
+
+            sys.stdout.write(MOVE_UP.format(len(rendered)))
+            rendered = _render()
+            for line in rendered:
+                sys.stdout.write(CLEAR_LINE + "\r" + line + "\n")
+            sys.stdout.flush()
+    except (KeyboardInterrupt, EOFError):
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.flush()
+        return -1
 
 
 # ── Helper Utilities ──────────────────────────────────────────────────────────
@@ -168,19 +439,6 @@ def print_status(config):
     print()
 
 
-def print_menu():
-    """Print the main action menu with numbered, icon-annotated options."""
-    print(f"  {BOLD}{WHITE}Actions{RESET}")
-    print()
-    print(f"    {BOLD}{CYAN}1{RESET} {DIM}│{RESET} {ICON_ADD}  Add words to censor")
-    print(f"    {BOLD}{CYAN}2{RESET} {DIM}│{RESET} {ICON_ADD}  Add domains to censor")
-    print(f"    {BOLD}{CYAN}3{RESET} {DIM}│{RESET} {ICON_REMOVE}  Remove a word or domain")
-    print(f"    {BOLD}{CYAN}4{RESET} {DIM}│{RESET} {ICON_TOGGLE}  Toggle pseudonym masking")
-    print()
-    print(f"    {BOLD}{CYAN}0{RESET} {DIM}│{RESET} {ICON_EXIT}  Save & exit")
-    print()
-
-
 def _success(msg: str):
     """Print a green success message."""
     print(f"\n  {GREEN}{ICON_CHECK} {msg}{RESET}\n")
@@ -230,14 +488,25 @@ def save_config(config_path: Path, config: dict) -> bool:
         return False
 
 
+# ── Main Menu Options ─────────────────────────────────────────────────────────
+
+MAIN_MENU = [
+    (ICON_ADD,    "Add words to censor"),
+    (ICON_ADD,    "Add domains to censor"),
+    (ICON_REMOVE, "Remove a word or domain"),
+    (ICON_TOGGLE, "Toggle pseudonym masking"),
+    (ICON_EXIT,   "Save & exit"),
+]
+
+
 # ── Interactive TUI Loop ──────────────────────────────────────────────────────
 
 def run_censor_tui(config_path: Path, target_path: Path):
     """
-    Run the interactive TUI loop.
+    Run the interactive TUI loop with arrow-key navigation.
 
-    Allows developers to manage lists of censored words and domains, and toggle
-    pseudonym masking settings with automatic configuration saving.
+    In a real terminal, the user navigates with arrow keys and selects
+    with Enter. In tests or piped input, falls back to numbered input.
 
     :param config_path: Path to the target .yoinkconfig.json configuration file.
     :param target_path: Path to the directory or file being packed.
@@ -262,15 +531,10 @@ def run_censor_tui(config_path: Path, target_path: Path):
     while True:
         print_header()
         print_status(config)
-        print_menu()
 
-        try:
-            choice = input(f"  {BOLD}{CYAN}{ICON_SPARKLE} Select option (0-4):{RESET} ").strip()
-        except (KeyboardInterrupt, EOFError):
-            print(f"\n  {DIM}Interrupted. Goodbye!{RESET}\n")
-            sys.exit(0)
+        selected = _arrow_select(MAIN_MENU)
 
-        if choice == "1":
+        if selected == 0:  # Add words
             _section("Add Words")
             print("  Enter project names, company names, or IP to censor.")
             word_input = input(f"  {DIM}Words (comma-separated):{RESET} ").strip()
@@ -294,7 +558,7 @@ def run_censor_tui(config_path: Path, target_path: Path):
             else:
                 _warn("No input provided.")
 
-        elif choice == "2":
+        elif selected == 1:  # Add domains
             _section("Add Domains")
             print("  Enter internal domain roots (e.g. internal.net, intranet.corp).")
             domain_input = input(f"  {DIM}Domains (comma-separated):{RESET} ").strip()
@@ -318,42 +582,30 @@ def run_censor_tui(config_path: Path, target_path: Path):
             else:
                 _warn("No input provided.")
 
-        elif choice == "3":
+        elif selected == 2:  # Remove
             _section("Remove Entry")
             items = []
             for w in config["censor_words"]:
-                items.append(("word", w))
+                items.append((MAGENTA, "WORD", w))
             for d in config["censor_domains"]:
-                items.append(("domain", d))
+                items.append((BLUE, "DOMAIN", d))
 
             if not items:
                 _warn("No active words or domains to remove.")
                 continue
 
-            for idx, (type_, name) in enumerate(items, 1):
-                tag = _pill("WORD", MAGENTA) if type_ == "word" else _pill("DOMAIN", BLUE)
-                print(f"    {BOLD}{CYAN}{idx}{RESET} {DIM}│{RESET} {tag} {name}")
+            remove_idx = _arrow_select_items(items, "Select entry to remove")
+            if remove_idx < 0:
+                continue
+            color, tag, name = items[remove_idx]
+            if tag == "WORD":
+                config["censor_words"].remove(name)
+            else:
+                config["censor_domains"].remove(name)
+            if save_config(config_path, config):
+                _success(f"Removed {tag.lower()} '{name}' — auto-saved.")
 
-            print()
-            try:
-                remove_choice = input(f"  {DIM}Select # to remove (Enter to cancel):{RESET} ").strip()
-                if not remove_choice:
-                    continue
-                remove_idx = int(remove_choice) - 1
-                if 0 <= remove_idx < len(items):
-                    type_, name = items[remove_idx]
-                    if type_ == "word":
-                        config["censor_words"].remove(name)
-                    else:
-                        config["censor_domains"].remove(name)
-                    if save_config(config_path, config):
-                        _success(f"Removed {type_} '{name}' — auto-saved.")
-                else:
-                    _error("Invalid selection.")
-            except ValueError:
-                _error("Please enter a valid number.")
-
-        elif choice == "4":
+        elif selected == 3:  # Toggle
             config["pseudonym_masking"] = not config["pseudonym_masking"]
             if save_config(config_path, config):
                 if config["pseudonym_masking"]:
@@ -361,12 +613,12 @@ def run_censor_tui(config_path: Path, target_path: Path):
                 else:
                     _warn("Pseudonym masking DISABLED — names will be [REDACTED].")
 
-        elif choice == "0":
+        elif selected == 4:  # Exit
             print(f"\n  {DIM}{ICON_EXIT} Goodbye!{RESET}\n")
             sys.exit(0)
 
         else:
-            _error("Invalid option. Please enter 0-4.")
+            _error("Invalid option.")
 
 
 # ── Init Wizard ───────────────────────────────────────────────────────────────

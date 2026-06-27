@@ -43,20 +43,26 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "censor":
         subcommand = sys.argv[2] if len(sys.argv) > 2 else ""
         if subcommand not in ("init", "show", "tui"):
-            print("Error: Unknown censor command. Available: 'init', 'show', 'tui'", file=sys.stderr)
+            print(
+                "Error: Unknown censor command. Available: 'init', 'show', 'tui'",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
         config_file = Path(".yoinkconfig.json")
         if subcommand == "init":
             from yoink.cli.tui import run_censor_init
+
             run_censor_init(config_file)
             sys.exit(0)
         elif subcommand == "show":
             from yoink.cli.tui import run_censor_show
+
             run_censor_show(config_file)
             sys.exit(0)
         elif subcommand == "tui":
             from yoink.cli.tui import run_censor_tui
+
             run_censor_tui(config_file, Path("."))
             sys.exit(0)
 
@@ -128,8 +134,6 @@ def main():
             workspace_cfg = Path(".yoinkconfig.json").resolve()
             config_file = workspace_cfg if workspace_cfg.exists() else None
 
-
-
     config = load_config(config_file)
 
     # We consolidate multiple fine-grained formatting rules into a single
@@ -151,13 +155,16 @@ def main():
         strip_whitespace = config.get("strip_whitespace", True)
         mask_secrets_enabled = config.get("mask_secrets", True)
         # Fallback to checking both spellings in the configuration structure.
-        visualize = False if args.no_visualize else config.get("visualize", config.get("visualise", True))
+        visualize = (
+            False
+            if args.no_visualize
+            else config.get("visualize", config.get("visualise", True))
+        )
         secret_patterns = config.get("secret_patterns", None)
         compliance_patterns = config.get("compliance_patterns", None)
         censor_words = config.get("censor_words", None)
         censor_domains = config.get("censor_domains", None)
         pseudonym_masking = config.get("pseudonym_masking", True)
-
 
     exclude_patterns = config.get("exclude_patterns") or []
     if args.exclude_tests:
